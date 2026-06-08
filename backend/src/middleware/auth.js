@@ -1,5 +1,13 @@
 const authService = require('../services/authService');
 
+/**
+ * JWT authentication middleware.
+ *
+ * API integration flow:
+ *   Authorization: Bearer <token> → verifyToken() → req.user = { userId, email, role }
+ *
+ * Downstream controllers read req.user for RBAC scoping and audit attribution.
+ */
 function authenticate(req, res, next) {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) {

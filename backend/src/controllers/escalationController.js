@@ -1,5 +1,13 @@
 const escalationService = require('../services/escalationService');
 
+/**
+ * POST /api/escalations
+ * Creates an escalation for an overdue task. Requires manager or admin role.
+ *
+ * Request body:  { taskId: string, reason?: string }
+ * Response 201: escalation record
+ * Response 400: validation failure (not overdue, duplicate, etc.)
+ */
 function createEscalation(req, res) {
   const { taskId, reason } = req.body;
   if (!taskId) {
@@ -19,6 +27,12 @@ function createEscalation(req, res) {
   return res.status(201).json(result.escalation);
 }
 
+/**
+ * GET /api/escalations/history
+ * Managers see only their escalations; admins can pass ?managerId to filter.
+ *
+ * Query params: status?, managerId? (admin only)
+ */
 function getHistory(req, res) {
   const { status } = req.query;
   const managerId = req.user.role === 'manager' ? req.user.userId : req.query.managerId;
@@ -26,6 +40,12 @@ function getHistory(req, res) {
   return res.json(history);
 }
 
+/**
+ * PUT /api/escalations/:id/status
+ * Transitions escalation lifecycle state and writes audit trail.
+ *
+ * Request body: { status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED' }
+ */
 function updateStatus(req, res) {
   const { status } = req.body;
   if (!status) {

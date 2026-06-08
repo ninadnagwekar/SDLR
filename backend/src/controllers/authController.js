@@ -1,6 +1,17 @@
 const authService = require('../services/authService');
 const auditService = require('../services/auditService');
 
+/**
+ * POST /api/auth/login
+ * Public endpoint — authenticates user and issues a JWT.
+ *
+ * API integration flow:
+ *   { email, password } → authService.login() → { token, user }
+ *   → audit log (USER_LOGIN)
+ *
+ * Response 200: { token: string, user: { id, email, role } }
+ * Response 401: invalid credentials
+ */
 function login(req, res) {
   const { email, password } = req.body;
   if (!email || !password) {
