@@ -3,16 +3,28 @@ const taskService = require('./taskService');
 const userService = require('./userService');
 const auditService = require('./auditService');
 
+/** In-memory escalation store. Replace with PostgreSQL when DATABASE_URL is configured. */
 const escalations = [];
 
 function findById(id) {
   return escalations.find((e) => e.id === id) || null;
 }
 
+/**
+ * Finds a non-closed escalation for a task.
+ * CLOSED escalations are ignored so a new escalation can be opened later.
+ */
 function findByTaskId(taskId) {
   return escalations.find((e) => e.taskId === taskId && e.status !== 'CLOSED') || null;
 }
 
+/**
+ * Returns escalation history sorted newest-first.
+ * Supports optional filters for manager dashboards and status views.
+ *
+ * @param {{ status?: string, managerId?: string }} filters
+ * @returns {object[]}
+ */
 function listHistory({ status, managerId } = {}) {
   return escalations
     .filter((e) => {
@@ -23,6 +35,16 @@ function listHistory({ status, managerId } = {}) {
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 }
 
+/**
+ * Creates an escalation after validating task eligibility.
+ *
+ * Data transformation flow:
+ *   taskId → task lookup → eligibility check → manager validation
+ *   → escalation record → audit log (ESCALATION_CREATED)
+ *
+ * @param {{ taskId: string, reason?: string, escalatedBy: string }} input
+ * @returns {{ success: true, escalation: object } | { success: false, error: string }}
+ */
 function createEscalation({ taskId, reason, escalatedBy }) {
   const task = taskService.findById(taskId);
   const eligibility = taskService.isEligibleForEscalation(task);
@@ -60,6 +82,13 @@ function createEscalation({ taskId, reason, escalatedBy }) {
   return { success: true, escalation };
 }
 
+/**
+ * Transitions escalation status and records before/after values in the audit trail.
+ *
+ * @param {string} id - Escalation UUID
+ * @param {'OPEN'|'IN_PROGRESS'|'RESOLVED'|'CLOSED'} status
+ * @param {string} userId - Acting user from JWT payload
+ */
 function updateStatus(id, status, userId) {
   const validStatuses = ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'];
   if (!validStatuses.includes(status)) {

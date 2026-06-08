@@ -1,0 +1,442 @@
+openapi: 3.0.3
+
+info:
+  title: Smart Task Escalation Engine API
+  version: 1.0.0
+  description: |
+    REST API for the Smart Task Escalation Engine.
+    Supports authentication, overdue task detection, escalation management,
+    manager notifications, and audit logging.
+
+servers:
+  - url: http://localhost:3000
+    description: Local development
+  - url: https://api.example.com
+    description: Production
+
+tags:
+  - name: Auth
+  - name: Tasks
+  - name: Escalations
+  - name: Notifications
+  - name: Audit
+
+paths:
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: User Login
+      description: Authenticate user and receive JWT token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Missing email or password
+        '401':
+          description: Invalid credentials
+
+  /api/tasks:
+    get:
+      tags: [Tasks]
+      summary: List Tasks
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, IN_PROGRESS, OVERDUE, COMPLETED]
+        - name: assigneeId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+        '401':
+          description: Authentication required
+    post:
+      tags: [Tasks]
+      summary: Create Task
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskRequest'
+      responses:
+        '201':
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          description: Validation error
+        '403':
+          description: Insufficient permissions
+
+  /api/tasks/overdue:
+    get:
+      tags: [Tasks]
+      summary: List Overdue Tasks
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Overdue tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+        '403':
+          description: Manager or admin only
+
+  /api/escalations:
+    post:
+      tags: [Escalations]
+      summary: Create Escalation
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEscalationRequest'
+      responses:
+        '201':
+          description: Escalation created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Escalation'
+        '400':
+          description: Task not eligible or duplicate escalation
+        '403':
+          description: Manager or admin only
+
+  /api/escalations/history:
+    get:
+      tags: [Escalations]
+      summary: Escalation History
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [OPEN, IN_PROGRESS, RESOLVED, CLOSED]
+        - name: managerId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Escalation history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Escalation'
+
+  /api/escalations/{id}/status:
+    put:
+      tags: [Escalations]
+      summary: Update Escalation Status
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateEscalationStatusRequest'
+      responses:
+        '200':
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Escalation'
+        '400':
+          description: Invalid status
+        '404':
+          description: Escalation not found
+
+  /api/notifications/trigger:
+    post:
+      tags: [Notifications]
+      summary: Trigger Manager Notification
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TriggerNotificationRequest'
+      responses:
+        '200':
+          description: Notification sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationResponse'
+        '404':
+          description: Escalation not found
+
+  /api/notifications:
+    get:
+      tags: [Notifications]
+      summary: List Notifications
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Notification list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Notification'
+
+  /api/audit:
+    get:
+      tags: [Audit]
+      summary: List Audit Logs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: action
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Audit log entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditLog'
+        '403':
+          description: Admin only
+
+  /api/health:
+    get:
+      tags: [Auth]
+      summary: Health Check
+      responses:
+        '200':
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  timestamp:
+                    type: string
+                    format: date-time
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [employee, manager, admin]
+
+    Task:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        assigneeId:
+          type: string
+        managerId:
+          type: string
+        dueDate:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [PENDING, IN_PROGRESS, OVERDUE, COMPLETED]
+
+    CreateTaskRequest:
+      type: object
+      required: [title, assigneeId, managerId, dueDate]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        assigneeId:
+          type: string
+        managerId:
+          type: string
+        dueDate:
+          type: string
+          format: date-time
+
+    Escalation:
+      type: object
+      properties:
+        id:
+          type: string
+        taskId:
+          type: string
+        escalatedBy:
+          type: string
+        managerId:
+          type: string
+        reason:
+          type: string
+        status:
+          type: string
+          enum: [OPEN, IN_PROGRESS, RESOLVED, CLOSED]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateEscalationRequest:
+      type: object
+      required: [taskId]
+      properties:
+        taskId:
+          type: string
+        reason:
+          type: string
+
+    UpdateEscalationStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [OPEN, IN_PROGRESS, RESOLVED, CLOSED]
+
+    TriggerNotificationRequest:
+      type: object
+      required: [escalationId]
+      properties:
+        escalationId:
+          type: string
+
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+        escalationId:
+          type: string
+        recipientId:
+          type: string
+        message:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, SENT, FAILED]
+
+    NotificationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        notification:
+          $ref: '#/components/schemas/Notification'
+
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: string
+        action:
+          type: string
+        userId:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+        createdAt:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string

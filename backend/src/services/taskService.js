@@ -1,10 +1,20 @@
 const { tasks, uuid } = require('../data/seed');
 
+/**
+ * Determines whether a task has passed its due date.
+ * Completed tasks are never treated as overdue regardless of dueDate.
+ */
 function isOverdue(task) {
   if (task.status === 'COMPLETED') return false;
   return new Date(task.dueDate) < new Date();
 }
 
+/**
+ * Mutates task statuses in-place before reads.
+ * Transforms PENDING/IN_PROGRESS tasks past dueDate into OVERDUE.
+ * Called before every query so list endpoints return current state
+ * without a background scheduler.
+ */
 function refreshOverdueStatus() {
   tasks.forEach((task) => {
     if (isOverdue(task) && task.status !== 'COMPLETED') {
@@ -14,6 +24,10 @@ function refreshOverdueStatus() {
   });
 }
 
+/**
+ * @param {{ assigneeId?: string, status?: string }} filters
+ * Employees are scoped to their own tasks; managers/admins see all unless filtered.
+ */
 function listTasks({ assigneeId, status } = {}) {
   refreshOverdueStatus();
   return tasks.filter((task) => {
@@ -33,6 +47,13 @@ function getOverdueTasks() {
   return tasks.filter((t) => t.status === 'OVERDUE');
 }
 
+/**
+ * Gate used by the escalation engine before creating a record.
+ * Returns a structured result so callers can surface specific rejection reasons.
+ *
+ * @param {object|null} task
+ * @returns {{ eligible: true } | { eligible: false, reason: string }}
+ */
 function isEligibleForEscalation(task) {
   refreshOverdueStatus();
   if (!task) return { eligible: false, reason: 'Task not found' };
@@ -45,6 +66,9 @@ function isEligibleForEscalation(task) {
   return { eligible: true };
 }
 
+/**
+ * Transforms API payload into a persisted task entity with generated id and timestamps.
+ */
 function createTask(payload) {
   const task = {
     id: uuid(),

@@ -5,6 +5,9 @@ const auditService = require('./auditService');
 
 const notifications = [];
 
+/**
+ * @param {{ recipientId?: string, escalationId?: string }} filters
+ */
 function listNotifications({ recipientId, escalationId } = {}) {
   return notifications.filter((n) => {
     if (recipientId && n.recipientId !== recipientId) return false;
@@ -13,6 +16,18 @@ function listNotifications({ recipientId, escalationId } = {}) {
   });
 }
 
+/**
+ * Notifies the manager assigned to an escalation's underlying task.
+ *
+ * Data transformation flow:
+ *   escalationId → escalation lookup → manager lookup
+ *   → notification message → SENT status → audit log (NOTIFICATION_TRIGGERED)
+ *
+ * Production: replace mock SENT status with AWS SES delivery callback.
+ *
+ * @param {{ escalationId: string, triggeredBy: string }} input
+ * @returns {{ success: true, notification: object } | { success: false, error: string }}
+ */
 function triggerNotification({ escalationId, triggeredBy }) {
   const escalation = escalationService.findById(escalationId);
   if (!escalation) {

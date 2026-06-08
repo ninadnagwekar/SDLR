@@ -179,12 +179,25 @@ GET http://localhost:3002/login
 ## Step 5 — Commit Changes
 
 ```text
-git init
-git add <project files>
-git commit -m "feat: implement Smart Task Escalation Engine backend and frontend"
-```
+> git init
+Initialized empty Git repository in D:/SDLR/deliverables/project/.git/
 
-See git log output in Section 5 commit log below.
+> git add backend/ frontend/ PLAN.md STATUS.md SDLR-DELIVERABLE.md .gitignore
+> git commit -m "feat: implement Smart Task Escalation Engine backend and frontend"
+
+[master (root-commit) e077b1a] feat: implement Smart Task Escalation Engine backend and frontend
+ 48 files changed, 8643 insertions(+)
+
+commit e077b1a67cd5328cbf2ecb2f417eb4083599cefa
+Author: Ninad Nagwekar <ninad.nagwekar@pdc.com>
+Date:   Mon Jun 8 13:31:10 2026 +0530
+
+    feat: implement Smart Task Escalation Engine backend and frontend
+
+    Deliver SDLR Phase 6 agentic development loop with JWT auth, RBAC,
+    escalation workflow, notifications, audit logging, Next.js dashboard,
+    and 15 passing unit tests at 82.65% coverage.
+```
 
 ---
 

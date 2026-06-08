@@ -1,18 +1,9 @@
-const request = require('supertest');
-const app = require('../src/server');
-const { resetRuntimeStores } = require('../src/data/reset');
+const { app, request, loginAs, setupTestIsolation } = require('./helpers');
 
-beforeEach(() => {
-  resetRuntimeStores();
-});
-
-async function loginAs(email, password) {
-  const res = await request(app).post('/api/auth/login').send({ email, password });
-  return res.body.token;
-}
+setupTestIsolation();
 
 describe('Audit API', () => {
-  test('admin can view audit logs', async () => {
+  test('admin can view audit logs after escalation', async () => {
     const token = await loginAs('admin@example.com', 'admin123');
 
     await request(app)
@@ -26,9 +17,52 @@ describe('Audit API', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.some((log) => log.action === 'ESCALATION_CREATED')).toBe(true);
+    expect(res.body.some((log) => log.action === 'USER_LOGIN')).toBe(true);
   });
 
-  test('non-admin cannot view audit logs', async () => {
+  test('audit logs status change events', async () => {
+    const token = await loginAs('admin@example.com', 'admin123');
+
+    const createRes = await request(app)
+      .post('/api/escalations')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ taskId: 'TASK-001' });
+
+    await request(app)
+      .put(`/api/escalations/${createRes.body.id}/status`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: 'RESOLVED' });
+
+    const res = await request(app)
+      .get('/api/audit')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.some((log) => log.action === 'ESCALATION_STATUS_UPDATED')).toBe(true);
+  });
+
+  test('audit logs notification trigger events', async () => {
+    const token = await loginAs('admin@example.com', 'admin123');
+
+    const createRes = await request(app)
+      .post('/api/escalations')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ taskId: 'TASK-001' });
+
+    await request(app)
+      .post('/api/notifications/trigger')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ escalationId: createRes.body.id });
+
+    const res = await request(app)
+      .get('/api/audit')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.some((log) => log.action === 'NOTIFICATION_TRIGGERED')).toBe(true);
+  });
+
+  test('employee cannot view audit logs', async () => {
     const token = await loginAs('employee@example.com', 'employee123');
 
     const res = await request(app)
@@ -36,5 +70,17 @@ describe('Audit API', () => {
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.status).toBe(403);
+    expect(res.body.error).toBe('Insufficient permissions');
+  });
+
+  test('manager cannot view audit logs', async () => {
+    const token = await loginAs('manager@example.com', 'manager123');
+
+    const res = await request(app)
+      .get('/api/audit')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('Insufficient permissions');
   });
 });
